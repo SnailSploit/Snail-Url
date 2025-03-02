@@ -1,0 +1,36 @@
+# ================================
+# Stage 1: Build environment
+# ================================
+FROM golang:1.19 AS builder
+
+ENV GO111MODULE=on
+# Install Go-based tools:
+RUN go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest \
+    && go install github.com/tomnomnom/waybackurls@latest \
+    && go install github.com/lc/gau@latest \
+    && go install github.com/tomnomnom/unfurl@latest
+
+# ================================
+# Stage 2: Runtime environment
+# ================================
+FROM python:3.9-slim
+
+# Copy tools from builder
+COPY --from=builder /go/bin/subfinder /usr/local/bin/
+COPY --from=builder /go/bin/waybackurls /usr/local/bin/
+COPY --from=builder /go/bin/gau /usr/local/bin/
+COPY --from=builder /go/bin/unfurl /usr/local/bin/
+
+# Install system packages & Python libs
+RUN apt-get update && apt-get install -y \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip3 install --no-cache-dir paramspider requests
+
+# Copy the script into /app
+WORKDIR /app
+COPY snail_url_extended.py /app/snail_url_extended.py
+
+# By default, run snail_url_extended.py; pass arguments as needed
+ENTRYPOINT ["python3", "/app/snail_url_extended.py"]
